@@ -113,6 +113,9 @@ class Layer():
     Write the code for forward pass through a layer. Do not apply activation function here.
     """
     self.x = x
+    # output*examples
+    #
+    self.a = self.w.T@self.x+self.b.T
     return self.a
   
   def backward_pass(self, delta):
