@@ -15,11 +15,25 @@ config['momentum'] = False  # Denotes if momentum is to be applied or not
 config['momentum_gamma'] = 0.9  # Denotes the constant 'gamma' in momentum expression
 config['learning_rate'] = 0.0001 # Learning rate of gradient descent algorithm
 
+
+##check vstack or hstack
+def add_bias_column(x):
+    ones=np.ones(1,len(x))
+    x=np.vstack((ones,x))
+    return x
+
 def softmax(x):
   """
   Write the code for softmax activation function that takes in a numpy array and returns a numpy array.
   """
+  output= np.exp(x) / np.sum(np.exp(x), axis=0)
   return output
+
+def one_hot_encoder(self, input_labels_digits):
+  classes_count = config['layer_specs'][-1]  # # [0,1,2,3,4,5] possible for 6 classes
+  input_labels_digits = np.array(input_labels_digits).reshape(-1)  # [[0,0,1,1,2,2,3,3...]]
+  one_hot_targets = np.eye(classes_count)[input_labels_digits]
+  return one_hot_targets
 
 
 def load_data(fname):
@@ -27,6 +41,9 @@ def load_data(fname):
   Write code to read the data and return it as 2 numpy arrays.
   Make sure to convert labels to one hot encoded format.
   """
+  with open(fname) as f:
+      file_data=pickle.load(f)
+
   return images, labels
 
 
@@ -62,6 +79,7 @@ class Activation:
     Write the code for sigmoid activation function that takes in a numpy array and returns a numpy array.
     """
     self.x = x
+    output = 1. / (1. + np.exp(-x))
     return output
 
   def tanh(self, x):
@@ -69,6 +87,7 @@ class Activation:
     Write the code for tanh activation function that takes in a numpy array and returns a numpy array.
     """
     self.x = x
+    output=np.tanh(x)
     return output
 
   def ReLU(self, x):
@@ -76,46 +95,52 @@ class Activation:
     Write the code for ReLU activation function that takes in a numpy array and returns a numpy array.
     """
     self.x = x
+    output=np.maximum(self.x,0)
     return output
 
   def grad_sigmoid(self):
     """
     Write the code for gradient through sigmoid activation function that takes in a numpy array and returns a numpy array.
     """
+    grad = (1. / (1. + np.exp(-self.x)))*(1. / (1. + np.exp(self.x)))
     return grad
 
   def grad_tanh(self):
     """
     Write the code for gradient through tanh activation function that takes in a numpy array and returns a numpy array.
     """
+    tanh_result=np.tanh(self.x)
+    grad=1-tanh_result*tanh_result
     return grad
 
   def grad_ReLU(self):
     """
     Write the code for gradient through ReLU activation function that takes in a numpy array and returns a numpy array.
     """
+    grad=np.greater(self.x, 0).astype(dtype=int)
     return grad
 
 
 class Layer():
   def __init__(self, in_units, out_units):
     np.random.seed(42)
-    self.w = np.random.randn(in_units, out_units)  # Weight matrix
+    self.w = np.random.randn(in_units+1, out_units)  # Weight matrix
     self.b = np.zeros((1, out_units)).astype(np.float32)  # Bias
-    self.x = None  # Save the input to forward_pass in this
+    # self.w=self.w.append(self.w,axis=1)
+    self.x = None  # Save the input to forward_pass in this n*input(p)
     self.a = None  # Save the output of forward pass in this (without activation)
     self.d_x = None  # Save the gradient w.r.t x in this
     self.d_w = None  # Save the gradient w.r.t w in this
     self.d_b = None  # Save the gradient w.r.t b in this
 
+
   def forward_pass(self, x):
     """
     Write the code for forward pass through a layer. Do not apply activation function here.
     """
-    self.x = x
-    # output*examples
-    #
-    self.a = self.w.T@self.x+self.b.T
+    x=add_bias_column(x)
+    self.x = x # examples*output
+    self.a = self.x@self.w ##n*output
     return self.a
   
   def backward_pass(self, delta):
@@ -123,9 +148,11 @@ class Layer():
     Write the code for backward pass. This takes in gradient from its next layer as input,
     computes gradient for its weights and the delta to pass to its previous layers.
     """
+    s1=delta@self.w.T ##n*input(j)
+    activationInst=Activation(config['activation'])
+    self.d_w=activationInst.backward_pass(s1)
     return self.d_x
 
-      
 class Neuralnetwork():
   def __init__(self, config):
     self.layers = []
@@ -142,13 +169,20 @@ class Neuralnetwork():
     Write the code for forward pass through all layers of the model and return loss and predictions.
     If targets == None, loss should be None. If not, then return the loss computed.
     """
-    self.x = x
+    self.x = x.copy()
+    for layerl in self.layers:
+        x=layerl.forward_pass(x)
+    self.y=softmax(x)
+    self.targets=targets
+    loss=self.loss_func(self.targets,np.log(self.y))
     return loss, self.y
 
   def loss_func(self, logits, targets):
     '''
     find cross entropy loss between logits and targets
     '''
+    output = -np.trace(np.dot(targets.T,logits))
+    # output = error / len(logits)
     return output
     
   def backward_pass(self):
@@ -156,19 +190,39 @@ class Neuralnetwork():
     implement the backward pass for the whole network. 
     hint - use previously built functions.
     '''
-      
+    delta=self.y-self.targets
+    for layerl in self.layers:
+        delta=layerl.backward_pass(delta)
+
+  def update_weights(self):
+    for layerl in self.layers:
+        if(type(layerl.__class__)==Layer):
+            layerl.w+=config['learning_rate']/len(layerl.x)@layerl.d_w
 
 def trainer(model, X_train, y_train, X_valid, y_valid, config):
   """
   Write the code to train the network. Use values from config to set parameters
   such as L2 penalty, number of epochs, momentum, etc.
   """
-  
-  
+  batch_size=config['batch_size']
+  num_batches=len(X_train)/batch_size
+  y_batches_list=np.array(np.split(y_train,num_batches))
+  for epoch in config['epochs']:
+      for batch_num,batch in enumerate(np.array(np.split(X_train,num_batches))):
+          loss,final_y=model.forward_pass(batch,y_batches_list[batch_num])
+          model.backward_pass()
+          model.update_weights()
+
 def test(model, X_test, y_test, config):
   """
   Write code to run the model on the data passed as input and return accuracy.
   """
+  loss,predictions=model.forward_pass(X_test,y_test)
+  accuracy = 0
+  for i in range(y_test.shape[0]):
+      if np.argmax(predictions[i]) == np.argmax(y_test[i]):
+          accuracy += 1
+  accuracy /= y_test.shape[0]
   return accuracy
       
 
