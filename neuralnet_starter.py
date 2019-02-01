@@ -39,6 +39,53 @@ def one_hot_encoder(input_labels_digits):
     one_hot_targets = np.eye(classes_count)[input_labels_digits.astype(dtype=int)]
     return one_hot_targets
 
+def plotting_func( x, y, xlabel="epochs", ylabel="error", y1legend="validation accuracy",title="Accuracy vs epochs curve",):
+    """
+    :param title:
+    :param x:
+    :param y:
+    :param y2:
+    :param xlabel:
+    :param ylabel:
+    :param y1legend:
+    :param y2legend:
+    :return:
+    """
+    plt.figure()
+    plt.plot(x, y)
+#     plt.plot(x, y2)
+    plt.title(title)
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
+
+    plt.grid(True)
+    plt.legend((y1legend), loc='best')
+    plt.show()
+    
+
+def plotting_func( x, y,y2, xlabel="epochs", ylabel="error", y1legend="validation accuracy",y2legend ="training error",title="Accuracy vs epochs curve",):
+    """
+    :param title:
+    :param x:
+    :param y:
+    :param y2:
+    :param xlabel:
+    :param ylabel:
+    :param y1legend:
+    :param y2legend:
+    :return:
+    """
+    plt.figure()
+    plt.plot(x, y)
+    plt.plot(x, y2)
+    plt.title(title)
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
+
+    plt.grid(True)
+    plt.legend(y1legend,y2legend, loc='best')
+    plt.show()
+    
 
 def load_data(fname):
     """
